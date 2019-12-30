@@ -1,0 +1,18 @@
+language: python
+
+sudo: true
+
+resources:
+  gpu: true
+
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install linux-headers-$(uname -r)
+  - wget 'http://us.download.nvidia.com/tesla/396.37/NVIDIA-Linux-x86_64-396.37.run'
+  - sudo /bin/bash ./NVIDIA-Linux-x86_64-396.37.run -s
+  - sudo nvidia-smi -pm 1
+  - sudo nvidia-smi
+
+install: pip install gpustat
+
+script: gpustat -cp
