@@ -1,18 +1,55 @@
-language: python
+---
+matrix:
+  fast_finish: true
+  include:
 
-sudo: true
-
-resources:
-  gpu: true
-
-before_install:
-  - sudo apt-get update
-  - sudo apt-get install linux-headers-$(uname -r)
-  - wget 'http://us.download.nvidia.com/tesla/396.37/NVIDIA-Linux-x86_64-396.37.run'
-  - sudo /bin/bash ./NVIDIA-Linux-x86_64-396.37.run -s
-  - sudo nvidia-smi -pm 1
-  - sudo nvidia-smi
-
-install: pip install gpustat
-
-script: gpustat -cp
+# https://stackoverflow.com/questions/29986942/continuous-integration-service-for-gpu-package
+# since Travis-CI instances do not have an NVIDIA GPU installed.
+    - name: CUDA 10
+      env:
+      # https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/
+      - CUDA=10.2.89-1
+      - CUDA_SHORT=10.2
+      - UBUNTU_VERSION=ubuntu1804
+      dist: bionic
+      # compiler:
+      #   - gcc
+      sudo: enabled
+      language: python
+      python: 3.7
+      resources:
+          gpu: true
+      before_install:
+      - INSTALLER=cuda-repo-${UBUNTU_VERSION}_${CUDA}_amd64.deb
+      - wget http://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/x86_64/${INSTALLER}
+      - sudo dpkg -i ${INSTALLER}
+      - wget https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/x86_64/7fa2af80.pub
+      - sudo apt-key add 7fa2af80.pub
+      - sudo apt update -qq
+      - sudo apt install -y cuda-core-${CUDA_SHORT/./-} cuda-cudart-dev-${CUDA_SHORT/./-} cuda-cufft-dev-${CUDA_SHORT/./-}
+      - sudo apt clean
+      - CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}
+      - LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+      - PATH=${CUDA_HOME}/bin:${PATH}
+      install:
+        #Make clock, power and other settings persist across program runs / driver invocations
+        #nvidia-smi command runs much faster if PM mode is enabled
+        #https://nvidia.custhelp.com/app/answers/detail/a_id/3751/~/useful-nvidia-smi-queries
+        # - sudo nvidia-smi -pm 1
+        # - sudo nvidia-smi
+        - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+        - chmod +x miniconda.sh
+        - ./miniconda.sh -b
+        - export PATH=$HOME/miniconda3/bin:$PATH
+        - sudo apt install -y nvidia-cuda-toolkit
+      script:
+        - nvcc --version
+        - conda --version
+        - conda update -n base -c defaults conda --yes
+        - conda create -n fastai --yes
+        # - conda activate fastai # CommandNotFoundError: Your shell has not been properly configured to use 'conda activate'.
+        - conda init bash
+        # - conda install -c pytorch -c fastai fastai pytorch # generic
+        - conda install -c pytorch pytorch cudatoolkit=10.0 --yes # CUDA specific
+        - python -c 'import torch; print(torch.cuda.is_available())'  #should print True
+        # - python -c 'import torch; print(torch.rand(2,3).cuda())' # should print params device
